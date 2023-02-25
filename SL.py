@@ -98,16 +98,20 @@ def plotHeatmap(plot) -> None:
 
 def treeNewick(newick: str, plot):
 
-    def plotIt(newick: str, plot, root_pos=(0, 0), **kwargs) -> "float[tree depth]":
+    def plotIt(newick: str, plot, x=0, **kwargs) -> "float[tree depth]":
         """
-        kwargs: treeDepth=0, leafLabels=True, nodeLabels=True, leafDist=1
+        kwargs: treeDepth=0, lowestLeaf=x, leafLabels=True, nodeLabels=True, treeColor="black"
         """
-        if not newick:
-            return
         if newick[0] == "(" and newick[-1] == ")":
             newick = newick[1:-1]
 
-        leafDist = 1
+        lowestLeaf = kwargs.get("lowestLeaf", 15)
+        treeColor = "black"
+        nodeLabels = kwargs.get("nodeLabels", True)
+        leafLabels = kwargs.get("leafLabels", True)
+        kwargs["treeDepth"] = kwargs.get("treeDepth", 0)
+        myPosY = None
+
         if newick[0] == "(":
             splitIndex, openBrackets = 1, 1
             while openBrackets > 0:
@@ -115,43 +119,45 @@ def treeNewick(newick: str, plot):
                 openBrackets -= newick[splitIndex] == ")"
                 splitIndex += 1
             splitIndex += newick[splitIndex:].find(",")
+
             if newick[splitIndex] == ")":  # if it's sth. like (subTree)C:1
                 label, length = newick[newick.rfind(")")+1:].split(":")
-                x, y = root_pos
-                if kwargs.get("nodeLabels", True):
-                    plot.text(x + float(length), y, " " + label)
-                plot.plot([x, x + float(length)], [y, y], color="blue")
-                kwargs["treeDepth"] = plotIt(newick[1: newick.rfind(")")], plot, (x + float(length), y), **kwargs)
+                kwargs["treeDepth"], kwargs["lowestLeaf"], myPosY = plotIt(newick[1: newick.rfind(")")], plot, x + float(length), **kwargs)
+                if nodeLabels:
+                    plot.text(x + float(length), myPosY, " " + label)
+                plot.plot([x, x + float(length)], [myPosY, myPosY], color=treeColor)
+
             else:  # if it's sth. like (subTree)R:1,(subTree)Q:1
                 upper, lower = newick[:splitIndex], newick[splitIndex+1:]
-                x, y = root_pos
-                plot.plot([x, x], [y, y+leafDist], color="blue")  # neuer y-Wert muss noch angepasst werden (wie zähle ich Blätter eines Teilbaums)
-                kwargs["treeDepth"] = plotIt(upper, plot, (x, y+leafDist), **kwargs)
-                plot.plot([x, x], [y, y-leafDist], color="blue")
-                kwargs["treeDepth"] = plotIt(lower, plot, (x, y-leafDist), **kwargs)
+                kwargs["treeDepth"], kwargs["lowestLeaf"], upperPos = plotIt(upper, plot, x, **kwargs)
+                kwargs["treeDepth"], kwargs["lowestLeaf"], lowerPos = plotIt(lower, plot, x, **kwargs)
+                plot.plot([x, x], [upperPos, lowerPos], color=treeColor)
+                myPosY = (upperPos - lowerPos) / 2 + lowerPos
 
-        elif "," in newick:  # if it's sth. like A:1,(subtree):B1
+        elif "," in newick:  # if it's sth. like A:1,(subtree)B:1
             upper, lower = newick.split(",", 1)
-            x, y = root_pos
-            plot.plot([x, x], [y, y+leafDist], color="blue")  # neuer y-Wert muss noch angepasst werden (wie zähle ich Blätter eines Teilbaums)
-            kwargs["treeDepth"] = plotIt(upper, plot, (x, y+leafDist), **kwargs)
-            plot.plot([x, x], [y, y-leafDist], color="blue")
-            kwargs["treeDepth"] = plotIt(lower, plot, (x, y-leafDist), **kwargs)
-        else:  # if it's sth. like A:1
+            kwargs["treeDepth"], kwargs["lowestLeaf"], upperPos = plotIt(upper, plot, x, **kwargs)
+            kwargs["treeDepth"], kwargs["lowestLeaf"], lowerPos = plotIt(lower, plot, x, **kwargs)
+            plot.plot([x, x], [upperPos, lowerPos], color=treeColor)
+            myPosY = (upperPos - lowerPos) / 2 + lowerPos
+
+        elif newick:  # if it's sth. like A:1
             label, length = newick.split(":")
-            x, y = root_pos
+            myPosY = lowestLeaf-1
             kwargs["treeDepth"] = max(kwargs.get("treeDepth", 0), x + float(length))
-            if kwargs.get("leafLabels", True):
-                plot.text(x + float(length), y, " " + label)
-            plot.plot([x, x + float(length)], [y, y], color="blue")
-        return kwargs.get("treeDepth", 0)
+            if leafLabels:
+                plot.text(x + float(length), myPosY, " " + label)
+            plot.plot([x, x + float(length)], [myPosY, myPosY], color=treeColor)
+            kwargs["lowestLeaf"] = myPosY
+
+        return kwargs["treeDepth"], kwargs["lowestLeaf"], myPosY
 
     newick = newick.replace(" ", "")
     childs = newick.count(":")
     if newick[-1] != ";":
         raise ValueError("Newick string doesn't end with a semicolon")
 
-    depth = plotIt(newick[:-1], plot)
+    depth, _, _ = plotIt(newick[:-1], plot)
     plot.set_xlim([0, depth])
     plot.set_xticks([0, depth/2,  depth])
     plot.spines['bottom'].set_visible(True)
@@ -159,9 +165,11 @@ def treeNewick(newick: str, plot):
     plot.spines['left'].set_visible(False)
     plot.spines['right'].set_visible(False)
     plot.yaxis.set_visible(False)
-    # print(globals()["plot"])
     globals()["plot"].savefig("tree.png")
 
 
 if __name__ == '__main__':
     main()
+    # a = np.random.normal(0, 1, 10)
+    # print("len=%d, avg=%f, <100: %s" % (len(a), sum(a)/len(a), np.all(abs(a) < 100)))
+    # print(abs(a))
