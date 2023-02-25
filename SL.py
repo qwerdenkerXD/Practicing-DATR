@@ -106,7 +106,7 @@ def treeNewick(newick: str, plot):
             newick = newick[1:-1]
 
         lowestLeaf = kwargs.get("lowestLeaf", 15)
-        treeColor = "black"
+        treeColor = kwargs.get("treeColor", "black") 
         nodeLabels = kwargs.get("nodeLabels", True)
         leafLabels = kwargs.get("leafLabels", True)
         kwargs["treeDepth"] = kwargs.get("treeDepth", 0)
