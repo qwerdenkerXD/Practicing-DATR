@@ -19,9 +19,15 @@ def main():
     corrMat = calcCorrMat(simData)
     newick, length = WPGMA(corrMat)
     print("Tree in Newick: \n%s;\n\nLength: %f" % (newick, length))
-    fig, plots = plot.subplots(1, 1)
+    fig, plots = plot.subplots(2, 1)
     fig.set_size_inches(20,20)
-    treeNewick(newick + ";", plots)
+    labels = treeNewick(newick + ";", plots[0], root_loc="top")
+
+    simData = zip(list(simData.keys()), list(simData.values()))
+    simData = sorted(simData, key=lambda x: labels.index(x[0]))
+    simData = {key: value for key, value in simData}
+    plotHeatmap(plots[1], simData)
+    plot.savefig("heatmap.png")
 
 
 def getRandoms(stdDev: float, mean: float, num=GENES) -> 'list of floats':
@@ -80,23 +86,21 @@ def WPGMA(corrMat: dict) -> "(Newick string, length tree)":
     return newick, length
 
 
-def plotHeatmap(plot) -> None:
-    #  plot simData as heatmap
-    plot.clf()
-    plot.figure(figsize=(20, 10))
-    plot.xticks(ticks=np.arange(len(simData)), labels=simData.keys(), rotation=90)
-    plot.yticks(ticks=np.arange(GENES), labels=["gene%d" % (i+1) for i in range(GENES)])
-    vals = np.array(list(simData.values()))
+def plotHeatmap(plot, data) -> None:
+    #  plot data as heatmap
+    # plot.clf()
+    # plot.figure(figsize=(20, 10))
+    plot.set_xticks(ticks=np.arange(len(data)), labels=data.keys(), rotation=90)
+    plot.set_yticks(ticks=np.arange(GENES), labels=["gene%d" % (i+1) for i in range(GENES)])
+    vals = np.array(list(data.values()))
     rotatedVals = [[vals[j][i]for j in range(len(vals))]for i in range(GENES)]
-    cmap = Cmap("rg")
-    cmap.set_extremes(under="green", over="red")
     show = plot.imshow(rotatedVals, cmap=microarray_cmap, interpolation="nearest")
-    plot.colorbar(show, location="left")
-    plot.savefig("plot.svg")
-    plot.clf()
+    # plot.colorbar(show, location="left")
+    # plot.savefig("plot.svg")
+    # plot.clf()
 
 
-def treeNewick(newick: str, plot):
+def treeNewick(newick: str, plot, root_loc="left"):
 
     def plotIt(newick: str, plot, x=0, **kwargs) -> "float[tree depth]":
         """
@@ -123,22 +127,22 @@ def treeNewick(newick: str, plot):
             if newick[splitIndex] == ")":  # if it's sth. like (subTree)C:1
                 label, length = newick[newick.rfind(")")+1:].split(":")
                 kwargs["treeDepth"], kwargs["lowestLeaf"], myPosY = plotIt(newick[1: newick.rfind(")")], plot, x + float(length), **kwargs)
-                if nodeLabels:
-                    plot.text(x + float(length), myPosY, " " + label)
-                plot.plot([x, x + float(length)], [myPosY, myPosY], color=treeColor)
+                #if nodeLabels:
+                #    plot.text(x + float(length), myPosY, " " + label)
+                draw([x, x + float(length)], [myPosY, myPosY], treeColor=treeColor)
 
             else:  # if it's sth. like (subTree)R:1,(subTree)Q:1
                 upper, lower = newick[:splitIndex], newick[splitIndex+1:]
                 kwargs["treeDepth"], kwargs["lowestLeaf"], upperPos = plotIt(upper, plot, x, **kwargs)
                 kwargs["treeDepth"], kwargs["lowestLeaf"], lowerPos = plotIt(lower, plot, x, **kwargs)
-                plot.plot([x, x], [upperPos, lowerPos], color=treeColor)
+                draw([x, x], [upperPos, lowerPos], treeColor=treeColor)
                 myPosY = (upperPos - lowerPos) / 2 + lowerPos
 
         elif "," in newick:  # if it's sth. like A:1,(subtree)B:1
             upper, lower = newick.split(",", 1)
             kwargs["treeDepth"], kwargs["lowestLeaf"], upperPos = plotIt(upper, plot, x, **kwargs)
             kwargs["treeDepth"], kwargs["lowestLeaf"], lowerPos = plotIt(lower, plot, x, **kwargs)
-            plot.plot([x, x], [upperPos, lowerPos], color=treeColor)
+            draw([x, x], [upperPos, lowerPos], treeColor=treeColor)
             myPosY = (upperPos - lowerPos) / 2 + lowerPos
 
         elif newick:  # if it's sth. like A:1
@@ -146,11 +150,28 @@ def treeNewick(newick: str, plot):
             myPosY = lowestLeaf-1
             kwargs["treeDepth"] = max(kwargs.get("treeDepth", 0), x + float(length))
             if leafLabels:
-                plot.text(x + float(length), myPosY, " " + label)
-            plot.plot([x, x + float(length)], [myPosY, myPosY], color=treeColor)
+                draw(x + float(length), myPosY, label)
+            draw([x, x + float(length)], [myPosY, myPosY], treeColor=treeColor)
             kwargs["lowestLeaf"] = myPosY
 
         return kwargs["treeDepth"], kwargs["lowestLeaf"], myPosY
+
+    def draw(x, y, label=None, treeColor="black"):
+        if label is None:
+            if root_loc in ("left", "right"):
+                plot.plot(x, y, color=treeColor)
+            else:
+                plot.plot(y, x, color=treeColor)
+        else:
+            label = " %s " % label
+            if root_loc == "left":
+                plot.text(x, y, label, verticalalignment="center")
+            elif root_loc == "right":
+                plot.text(x, y, label, verticalalignment="center", horizontalalignment="right")
+            elif root_loc == "bottom":
+                plot.text(y, x, label, horizontalalignment="center", rotation=90)
+            else:
+                plot.text(y, x, label, verticalalignment="top", horizontalalignment="center", rotation=90)
 
     newick = newick.replace(" ", "")
     childs = newick.count(":")
@@ -158,15 +179,31 @@ def treeNewick(newick: str, plot):
         raise ValueError("Newick string doesn't end with a semicolon")
 
     depth, _, _ = plotIt(newick[:-1], plot)
-    plot.set_xlim([0, depth])
-    plot.set_xticks([0, depth/2,  depth])
     plot.spines['bottom'].set_visible(True)
     plot.spines['top'].set_visible(False)
     plot.spines['left'].set_visible(False)
     plot.spines['right'].set_visible(False)
+    plot.set_xlim([0, depth])
+    plot.set_xticks([0, depth/2,  depth])
     plot.yaxis.set_visible(False)
-    globals()["plot"].savefig("tree.png")
+    allLabels = [text.get_text()[1:-1] for text in plot.texts]
+    if root_loc == "right":
+        plot.set_xticklabels([depth, depth/2, 0])
+        plot.invert_xaxis()
+    elif root_loc != "left":
+        allLabels = allLabels[::-1]
+        plot.spines["left"].set_visible(True)
+        plot.spines["bottom"].set_visible(False)
+        plot.yaxis.set_visible(True)
+        plot.xaxis.set_visible(False)
+        plot.autoscale("x")
+        plot.set_ylim([0, depth])
+        plot.set_yticks([0, depth/2,  depth])
+        if root_loc == "top":
+            plot.set_yticklabels([depth, depth/2, 0])
+            plot.invert_yaxis()
 
+    return allLabels
 
 if __name__ == '__main__':
     main()
