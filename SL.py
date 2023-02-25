@@ -1,4 +1,5 @@
 from matplotlib import pyplot as plot
+from matplotlib.gridspec import GridSpec
 from matplotlib.colors import LinearSegmentedColormap
 import math
 import numpy as np
@@ -15,34 +16,51 @@ microarray_cmap = LinearSegmentedColormap('microarray', {
 def main():
     #  simulate data
     np.random.seed(1)
-    simData = {"patient_%d_%s_replicate_%d" % (i//6+1, ["before", "after"][i//3%2], i%3+1): getRandoms(1, 1) for i in range(24)}
-    corrMat = calcCorrMat(simData)
-    newick, length = WPGMA(corrMat)
-    print("Tree in Newick: \n%s;\n\nLength: %f" % (newick, length))
-    fig, plots = plot.subplots(2, 1)
-    fig.set_size_inches(20,20)
-    labels = treeNewick(newick + ";", plots[0], root_loc="top")
+    simDataPatient = {"patient_%d_%s_replicate_%d" % (i//6+1, ["before", "after"][i//3%2], i%3+1): getRandoms() for i in range(24)}
 
-    simData = zip(list(simData.keys()), list(simData.values()))
-    simData = sorted(simData, key=lambda x: labels.index(x[0]))
-    simData = {key: value for key, value in simData}
-    plotHeatmap(plots[1], simData)
+    simDataGenes = {key: value[0] for key, value in zip(["gene%d" % i for i in range(1, GENES+1)], zip(simDataPatient.values()))}
+    corrMatPatient = calcCorrMat(simDataPatient)
+    corrMatGenes = calcCorrMat(simDataGenes)
+    specs = GridSpec(2, 2, width_ratios=[1, .1], height_ratios=[.2, .5], wspace=0.0, hspace=0, top=0.95, bottom=0.34, left=-.07, right=.97)
+
+    fig = plot.figure(figsize=(20, 10))
+    plots = [plot.subplot(specs[0, 0]), plot.subplot(specs[1, 0]), plot.subplot(specs[1, 1])]
+    topDendo, heat, rightDendo = plots
+
+    newickPat, depth = WPGMA(corrMatPatient)
+    treeNewick(newickPat + ";", topDendo, root_loc="top", leafLabels=False, showScale=False)
+    newickGen, depth = WPGMA(corrMatGenes)
+    treeNewick(newickGen + ";", rightDendo, root_loc="right", leafLabels=False, showScale=False)
+    lim1, lim2 = topDendo.get_xlim()
+    topDendo.set_xlim([lim1-7.4, lim2-.68])
+
+    plotHeatmap(heat, simDataPatient)
     plot.savefig("heatmap.png")
+    specs = GridSpec(1, 2, width_ratios=[1, 1], height_ratios=[1], wspace=.1, hspace=0, top=0.95, bottom=0.34, left=0.1, right=.97)
+    fig = plot.figure(figsize=(20, 8))
+    plots = [plot.subplot(specs[0, 0]), plot.subplot(specs[0, 1])]
+    for newick, subP in zip([newickPat, newickGen], plots):
+        treeNewick(newick + ";", subP, root_loc="top")
+    plot.savefig("trees.png")
 
 
-def getRandoms(stdDev: float, mean: float, num=GENES) -> 'list of floats':
-    return np.random.normal(mean, stdDev, num)
+def getRandoms(num=GENES) -> 'list of floats':
+    res = np.array([])
+    while len(res) < num:
+        random = np.random.normal(0, 100)
+        if abs(random) <= 100:
+            res = np.append(res, random)
+    return res
 
 
-def calcCorrMat(simData: list) -> "dict[dict[list]]":
+def calcCorrMat(data: dict) -> "dict[dict[list]]":
     #  calc correlation matrix, values are transformed to 1-correlation -> interval [0,2] with 0 as good correl(1) and 2 as bad(-1) and 
-    corrMat = dict.fromkeys(simData.keys(), 0)
+    corrMat = dict.fromkeys(data.keys(), 0)
     for i in corrMat:
-        corrMat[i] = dict.fromkeys(simData.keys(), 0)
+        corrMat[i] = dict.fromkeys(data.keys(), 0)
     for i in corrMat:
         for j in corrMat[i]:
-            # if j != i:
-            corrMat[i][j] = 1-sum(simData[i] * simData[j] / (sum(simData[i]**2)**.5 * sum(simData[j]**2)**.5))
+            corrMat[i][j] = 1-sum(data[i] * data[j] / (sum(data[i]**2)**.5 * sum(data[j]**2)**.5))
     return corrMat
 
 
@@ -87,20 +105,16 @@ def WPGMA(corrMat: dict) -> "(Newick string, length tree)":
 
 
 def plotHeatmap(plot, data) -> None:
-    #  plot data as heatmap
-    # plot.clf()
-    # plot.figure(figsize=(20, 10))
-    plot.set_xticks(ticks=np.arange(len(data)), labels=data.keys(), rotation=90)
-    plot.set_yticks(ticks=np.arange(GENES), labels=["gene%d" % (i+1) for i in range(GENES)])
+    plot.set_xticks(ticks=np.arange(len(data)), labels=data.keys(), rotation=90, fontsize=15)
+    plot.set_yticks(ticks=np.arange(GENES), labels=["gene%d" % (i+1) for i in range(GENES)], fontsize=15)
     vals = np.array(list(data.values()))
     rotatedVals = [[vals[j][i]for j in range(len(vals))]for i in range(GENES)]
-    show = plot.imshow(rotatedVals, cmap=microarray_cmap, interpolation="nearest")
-    # plot.colorbar(show, location="left")
-    # plot.savefig("plot.svg")
-    # plot.clf()
+    show = plot.imshow(rotatedVals, cmap=microarray_cmap, interpolation="nearest", aspect="auto")
+    bar = globals()["plot"].colorbar(show, location="left", ax=plot)
+    bar.ax.tick_params(labelsize=15)
 
 
-def treeNewick(newick: str, plot, root_loc="left"):
+def treeNewick(newick: str, plot, root_loc="left", leafLabels=True, showScale=True):
 
     def plotIt(newick: str, plot, x=0, **kwargs) -> "float[tree depth]":
         """
@@ -178,24 +192,29 @@ def treeNewick(newick: str, plot, root_loc="left"):
     if newick[-1] != ";":
         raise ValueError("Newick string doesn't end with a semicolon")
 
-    depth, _, _ = plotIt(newick[:-1], plot)
-    plot.spines['bottom'].set_visible(True)
+    depth, _, _ = plotIt(newick[:-1], plot, leafLabels=leafLabels)
+    plot.spines['bottom'].set_visible(False)
     plot.spines['top'].set_visible(False)
     plot.spines['left'].set_visible(False)
     plot.spines['right'].set_visible(False)
     plot.set_xlim([0, depth])
     plot.set_xticks([0, depth/2,  depth])
     plot.yaxis.set_visible(False)
+    plot.xaxis.set_visible(False)
+    if showScale:
+        plot.xaxis.set_visible(True)
+        plot.spines['bottom'].set_visible(True)
     allLabels = [text.get_text()[1:-1] for text in plot.texts]
     if root_loc == "right":
         plot.set_xticklabels([depth, depth/2, 0])
         plot.invert_xaxis()
     elif root_loc != "left":
         allLabels = allLabels[::-1]
-        plot.spines["left"].set_visible(True)
-        plot.spines["bottom"].set_visible(False)
-        plot.yaxis.set_visible(True)
-        plot.xaxis.set_visible(False)
+        if showScale:
+            plot.spines["left"].set_visible(True)
+            plot.spines["bottom"].set_visible(False)
+            plot.yaxis.set_visible(True)
+            plot.xaxis.set_visible(False)
         plot.autoscale("x")
         plot.set_ylim([0, depth])
         plot.set_yticks([0, depth/2,  depth])
@@ -204,6 +223,7 @@ def treeNewick(newick: str, plot, root_loc="left"):
             plot.invert_yaxis()
 
     return allLabels
+
 
 if __name__ == '__main__':
     main()
