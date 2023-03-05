@@ -28,13 +28,19 @@ def main():
     topDendo, heat, rightDendo = plots
 
     newickPat, depth = WPGMA(corrMatPatient)
-    treeNewick(newickPat + ";", topDendo, root_loc="top", leafLabels=False, showScale=False)
+    labels = treeNewick(newickPat + ";", topDendo, root_loc="top", leafLabels=True, showScale=False)
+    keys, values = simDataPatient.keys(), simDataPatient.values()
+    keys, values = zip(*sorted(zip(keys, values), key=lambda k: labels.index(k[0])))
+
     newickGen, depth = WPGMA(corrMatGenes)
-    treeNewick(newickGen + ";", rightDendo, root_loc="right", leafLabels=False, showScale=False)
+    labels = treeNewick(newickGen + ";", rightDendo, root_loc="right", leafLabels=False, showScale=False)
     lim1, lim2 = topDendo.get_xlim()
     topDendo.set_xlim([lim1-7.4, lim2-.68])
+    genes, values = zip(*sorted(zip(["gene%d" % i for i in range(1, GENES + 1)], zip(*values)), key=lambda k: labels.index(k[0])))
+    values = zip(*values)
+    simDataPatient = {key: value for key, value in zip(keys, values)}
 
-    plotHeatmap(heat, simDataPatient)
+    plotHeatmap(heat, simDataPatient, genes) # gene labels false
     plot.savefig("heatmap.png")
     specs = GridSpec(1, 2, width_ratios=[1, 1], height_ratios=[1], wspace=.1, hspace=0, top=0.95, bottom=0.34, left=0.1, right=.97)
     fig = plot.figure(figsize=(20, 8))
@@ -104,9 +110,9 @@ def WPGMA(corrMat: dict) -> "(Newick string, length tree)":
     return newick, length
 
 
-def plotHeatmap(plot, data) -> None:
+def plotHeatmap(plot, data, dataLabels=[]) -> None:
     plot.set_xticks(ticks=np.arange(len(data)), labels=data.keys(), rotation=90, fontsize=15)
-    plot.set_yticks(ticks=np.arange(GENES), labels=["gene%d" % (i+1) for i in range(GENES)], fontsize=15)
+    plot.set_yticks(ticks=np.arange(GENES), labels=dataLabels, fontsize=15)
     vals = np.array(list(data.values()))
     rotatedVals = [[vals[j][i]for j in range(len(vals))]for i in range(GENES)]
     show = plot.imshow(rotatedVals, cmap=microarray_cmap, interpolation="nearest", aspect="auto")
@@ -163,8 +169,7 @@ def treeNewick(newick: str, plot, root_loc="left", leafLabels=True, showScale=Tr
             label, length = newick.split(":")
             myPosY = lowestLeaf-1
             kwargs["treeDepth"] = max(kwargs.get("treeDepth", 0), x + float(length))
-            if leafLabels:
-                draw(x + float(length), myPosY, label)
+            draw(x + float(length), myPosY, label)  # plot label
             draw([x, x + float(length)], [myPosY, myPosY], treeColor=treeColor)
             kwargs["lowestLeaf"] = myPosY
 
@@ -178,14 +183,15 @@ def treeNewick(newick: str, plot, root_loc="left", leafLabels=True, showScale=Tr
                 plot.plot(y, x, color=treeColor)
         else:
             label = " %s " % label
+            alpha = float(leafLabels)
             if root_loc == "left":
-                plot.text(x, y, label, verticalalignment="center")
+                plot.text(x, y, label, alpha=alpha, verticalalignment="center")
             elif root_loc == "right":
-                plot.text(x, y, label, verticalalignment="center", horizontalalignment="right")
+                plot.text(x, y, label, alpha=alpha, verticalalignment="center", horizontalalignment="right")
             elif root_loc == "bottom":
-                plot.text(y, x, label, horizontalalignment="center", rotation=90)
+                plot.text(y, x, label, alpha=alpha, horizontalalignment="center", rotation=90)
             else:
-                plot.text(y, x, label, verticalalignment="top", horizontalalignment="center", rotation=90)
+                plot.text(y, x, label, alpha=alpha, verticalalignment="top", horizontalalignment="center", rotation=90)
 
     newick = newick.replace(" ", "")
     childs = newick.count(":")
