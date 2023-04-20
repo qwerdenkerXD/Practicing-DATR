@@ -95,7 +95,7 @@ def getRandoms(num=GENES) -> 'list of floats':
 def calcCorrMat(data: dict) -> "dict[dict[list]]":
     """
     Calculates a correlation matrix from data generated in main()
-    Values are transformed to 1-correlation -> interval [0,2] with 0 as positive correl(1) and 2 as negative(-1) and 1 as anticorrelation
+    Values are transformed to 1-correlation -> interval [0,2] with 0 as high correlation(1) and 2 as anti-correlation(-1)
     """
     corrMat = dict.fromkeys(data.keys(), 0)
     for i in corrMat:
