@@ -1,0 +1,2 @@
+Interpretation für numpy.random.seed(1):
+

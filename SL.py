@@ -11,6 +11,8 @@ import math
 import numpy as np
 
 GENES = 10
+PATIENTS = 4
+REPLICATES = 3
 
 microarray_cmap = LinearSegmentedColormap('microarray', {
     'green': [(0.0, 1.0, 1.0), (0.5, 0.2, 0.2), (1.0, 0.0, 0.0)],
@@ -27,19 +29,40 @@ def main():
     """
 
     #  simulate data
-    # np.random.seed(2139315)
     np.random.seed(1)
-    simDataPatient = {"patient_%d_%s_replicate_%d" % (i//6+1, ["before", "after"][i//3%2], i%3+1): getRandoms() for i in range(24)}
 
-    # simDataPatient contains per patient gene values in order [gene1, gene2, gene3...], so simDataGenes gets per gene the values of its index
-    simDataGenes = {key: value[0] for key, value in zip(["gene%d" % i for i in range(1, GENES+1)], zip(simDataPatient.values()))}
+    # generate random values for each gene
+    simDataGenes = {}
+    cancerGenes = np.random.randint(GENES, size=GENES // 3)
+    for g in range(1, GENES+1):
+        if g in cancerGenes:
+            simDataGenes["gene%d" % g] = getRandoms(30, 70, PATIENTS * REPLICATES * 2)
+        else:
+            simDataGenes["gene%d" % g] = getRandoms(-70, 30, PATIENTS * REPLICATES * 2)
+
+    # simDataGenes contains per gene values in order [patient_1_before..., patient_1_after..., ...], so simDataPatient gets per patient the values of its index
+    patientData = list(zip(*simDataGenes.values()))  # transpose
+
+    simDataPatient = {}
+    for p in range(1, 5):
+        for r in range(1, 4):
+            before, after = np.array(patientData[(p-1)*6 + 2 * r - 2]), np.array(patientData[(p-1)*6 + 2 * r - 1])
+
+            # check if data makes sense (if healthy before, it shouldn't be diseased after)
+            for i in range(10):
+                if after[i] > 0 and before[i] <= 0:
+                    after[i] = -after[i]
+                    simDataGenes["gene%d" % (i+1)][(p-1) * (r-1)] = after[i]
+
+            simDataPatient["patient_%d_after_replicate_%d" % (p, r)] = after
+            simDataPatient["patient_%d_before_replicate_%d" % (p, r)] = before
 
     # calc correlations
     corrMatPatient = calcCorrMat(simDataPatient)
     corrMatGenes = calcCorrMat(simDataGenes)
 
     # gridspec is necessary to adjust the distances between plots, so the dendograms can fit to the borders of the heatmap
-    specs = GridSpec(2, 2, width_ratios=[1, .1], height_ratios=[.2, .5], wspace=0.0, hspace=0, top=0.95, bottom=0.34, left=-.07, right=.97)
+    specs = GridSpec(2, 2, width_ratios=[1, .1], height_ratios=[.5, .5], wspace=0, hspace=0.0, top=0.95, bottom=0.34, left=-.07, right=.97)
 
     fig = plot.figure(figsize=(20, 10))
     plots = [plot.subplot(specs[0, 0]), plot.subplot(specs[1, 0]), plot.subplot(specs[1, 1])]
@@ -47,7 +70,7 @@ def main():
 
     # clustering and plotting the patients' dendogram to the top -> topDendo
     newickPat, depth = WPGMA(corrMatPatient)
-    labels = treeNewick(newickPat + ";", topDendo, root_loc="top", leafLabels=False, showScale=False)
+    labels = treeNewick(newickPat + ";", topDendo, root_loc="top", leafLabels=True, showScale=False)
 
     # now get the keys and values from simDataPatient sorted by the labels to fit to the dendogram
     keys, values = simDataPatient.keys(), simDataPatient.values()
@@ -80,13 +103,13 @@ def main():
     plot.savefig("trees.png")
 
 
-def getRandoms(num=GENES) -> 'list of floats':
+def getRandoms(mean, stddev, num) -> 'list of floats':
     """
     Generates num random values between +-100
     """
     res = np.array([])
     while len(res) < num:
-        random = np.random.normal(0, 100)
+        random = np.random.normal(mean, stddev)
         if abs(random) <= 100:
             res = np.append(res, random)
     return res
@@ -218,14 +241,14 @@ def treeNewick(newick: str, plot, root_loc="left", leafLabels=True, showScale=Tr
 
             # splitIndex is now the index of the comma after the tree or (if no comma there) the last bracket's index
 
-            if newick[splitIndex] == ")":  # if it's sth. like (subTree)C:1            -> root-drawing (horizontal)
+            if newick[splitIndex] == ")":  # if it's sth. like (subTree)C:1             -> root-drawing (horizontal)
                 label, length = newick[splitIndex+1:].split(":")
                 kwargs["treeDepth"], kwargs["lowestLeaf"], myPosY = recursive(newick[1: splitIndex], plot, x + float(length), **kwargs)
                 # if nodeLabels:
                 #    plot.text(x + float(length), myPosY, " " + label)
                 draw([x, x + float(length)], [myPosY, myPosY], treeColor=treeColor)
 
-            else:  # if it's sth. like (subTree)R:1,(subTree)Q:1                       -> connection (vertical)
+            else:  # if it's sth. like (subTree)R:1,(subTree)Q:1                        -> connection (vertical)
                 upper, lower = newick[:splitIndex], newick[splitIndex+1:]
                 kwargs["treeDepth"], kwargs["lowestLeaf"], upperPos = recursive(upper, plot, x, **kwargs)
                 kwargs["treeDepth"], kwargs["lowestLeaf"], lowerPos = recursive(lower, plot, x, **kwargs)
