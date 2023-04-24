@@ -9,6 +9,7 @@ from matplotlib.gridspec import GridSpec
 from matplotlib.colors import LinearSegmentedColormap
 import math
 import numpy as np
+from numpy.typing import NDArray
 
 GENES = 10
 PATIENTS = 4
@@ -103,7 +104,7 @@ def main():
     plot.savefig("trees.png")
 
 
-def getRandoms(mean, stddev, num) -> 'list of floats':
+def getRandoms(mean, stddev, num) -> 'NDArray[np.float64]':
     """
     Generates num random values between +-100
     """
@@ -115,12 +116,12 @@ def getRandoms(mean, stddev, num) -> 'list of floats':
     return res
 
 
-def calcCorrMat(data: dict) -> "dict[dict[list]]":
+def calcCorrMat(data: dict) -> "dict[str, dict[str, int]]":
     """
     Calculates a correlation matrix from data generated in main()
     Values are transformed to 1-correlation -> interval [0,2] with 0 as high correlation(1) and 2 as anti-correlation(-1)
     """
-    corrMat = dict.fromkeys(data.keys(), 0)
+    corrMat = dict.fromkeys(data.keys(), {})
     for i in corrMat:
         corrMat[i] = dict.fromkeys(data.keys(), 0)
     for i in corrMat:
@@ -129,7 +130,7 @@ def calcCorrMat(data: dict) -> "dict[dict[list]]":
     return corrMat
 
 
-def WPGMA(corrMat: dict) -> "(Newick string, length tree)":
+def WPGMA(corrMat: dict) -> "tuple[str, float]":
     """
     WPGMA to cluster, input will be changed, so make a copy
 
@@ -139,6 +140,9 @@ def WPGMA(corrMat: dict) -> "(Newick string, length tree)":
                   "d":{"a":31, "b":34, "c":28, "d":0, "e":43},
                   "e":{"a":23, "b":21, "c":39, "d":43, "e":0}
                   }
+
+    #Return:
+    tuple of Newick-formatted string of clustered tree and its depth
     """
     while len(corrMat) > 1:
         maxCorr = (float("+inf"), None, None)  # correl and its indices in corrMat
@@ -175,8 +179,8 @@ def WPGMA(corrMat: dict) -> "(Newick string, length tree)":
             corrMat[i].pop(child_1)
             corrMat[i].pop(child_2)
 
-    newick, length = list(corrMat.keys())[0], list(list(corrMat.values())[0].values())[0]
-    return newick, length
+    newick, depth = list(corrMat.keys())[0], list(list(corrMat.values())[0].values())[0]
+    return newick, depth
 
 
 def plotHeatmap(plot, data, dataLabels=[]) -> None:
@@ -207,7 +211,7 @@ def treeNewick(newick: str, plot, root_loc="left", leafLabels=True, showScale=Tr
     other possible strings aren't tested
     """
 
-    def recursive(newick: str, plot, x=0, **kwargs) -> "float[tree depth]":
+    def recursive(newick: str, plot, x=0., **kwargs) -> "tuple[float, float, float]":
         """
         Plots a dendogram recursively from a given newick string, root is left.
         This is done in 3 steps:
@@ -218,6 +222,9 @@ def treeNewick(newick: str, plot, root_loc="left", leafLabels=True, showScale=Tr
 
         x: the x-position where to plot the root
         kwargs: treeDepth=0, lowestLeaf=x, leafLabels=True, nodeLabels=True, treeColor="black"
+
+        #Return:
+        tuple of current tree depth, y-value of lowest leaf and self y-value
         """
         if newick[0] == "(" and newick[-1] == ")":
             newick = newick[1:-1]
@@ -227,7 +234,7 @@ def treeNewick(newick: str, plot, root_loc="left", leafLabels=True, showScale=Tr
         nodeLabels = kwargs.get("nodeLabels", True)  # not used for this script, but can be implemented
         leafLabels = kwargs.get("leafLabels", True)
         kwargs["treeDepth"] = kwargs.get("treeDepth", 0)
-        myPosY = None  # necessary to return it to center the previous root properly
+        myPosY = 0  # necessary to return it to center the previous root properly
 
         if newick[0] == "(":
 
