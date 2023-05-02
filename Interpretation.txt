@@ -6,5 +6,6 @@ Replicate 1 worked for all patients differently, since it either did nothing or 
 Replicate 2 worked only for patient 3, but cured all genes.
 Replicate 3 worked, it decreases the expression of gene 5 and can cure gene 9.
 
-If I took this experiment as not simulated, I would analyse what's so special with patient 3 that the second replicate cured all diseased genes. If that wasn't just a lucky result, this replicate would be a great choice for therapies. For genes 5 and 9 the third replicate is a good choice.
-If nothing helps, the first replicate is a well trial-and-error candidate
+If I took this experiment as not simulated, I would analyse what's so special with patient 3 that the second replicate cured all diseased genes. If that wasn't just a lucky result, this replicate would be a great choice for therapies.
+For genes 5 and 9 the third replicate is a good choice.
+If nothing helps, the first replicate is a well trial-and-error candidate.

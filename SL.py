@@ -204,7 +204,7 @@ def treeNewick(newick: str, plot, root_loc="left", leafLabels=True, showScale=Tr
     method to make it compatible.
 
     Works properly with the WPGMA-returned newick with following EBNF:
-    tree => "(" (tree|label) ":" distance "," (tree|label) ":" distance ")"
+    tree => "(" (tree|label) ":" distance "," (tree|label) ":" distance ")" ";"
     label => str
     distance => float
 
