@@ -2,6 +2,8 @@
 A module to practice clustering.
 
 Instead of using modules for WPGMA and dendogram plot, I implemented them by myself for more practice and, well, Python is fun :)
+
+GitHub: https://github.com/qwerdenkerXD/Practicing-DATR
 """
 
 from matplotlib import pyplot as plot
